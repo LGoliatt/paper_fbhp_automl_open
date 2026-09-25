@@ -1,0 +1,17 @@
+\begin{table}
+\caption{Bootstrap summary for the composite performance score across models.}
+\label{tab:bootstrap_metrics}
+\begin{tabular}{lcccccccc}
+\toprule
+ & n_runs & score_mean & ci95_low & ci95_high & std & sem & rank & prob_best \\
+Model &  &  &  &  &  &  &  &  \\
+\midrule
+H2O & 14 & 0.671900 & 0.538600 & 0.782000 & 0.241400 & 0.064500 & 1 & 0.606000 \\
+AutoGluon & 14 & 0.643400 & 0.588800 & 0.702100 & 0.112800 & 0.030100 & 2 & 0.208600 \\
+AutoSklearn & 14 & 0.639100 & 0.572900 & 0.693700 & 0.118600 & 0.031700 & 3 & 0.185400 \\
+FLAML & 14 & 0.481300 & 0.440500 & 0.523100 & 0.081100 & 0.021700 & 4 & 0.000000 \\
+TPOT & 14 & 0.443000 & 0.370300 & 0.523600 & 0.153400 & 0.041000 & 5 & 0.000000 \\
+Fedot & 8 & 0.319000 & 0.277700 & 0.355500 & 0.060000 & 0.021200 & 6 & 0.000000 \\
+\bottomrule
+\end{tabular}
+\end{table}
