@@ -16,8 +16,8 @@ help:
 	@echo "  make clean       - Remove temporary Python cache files and demo outputs"
 
 install:
-	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements.txt
+	$(PIP) install --upgrade pip --break-system-packages
+	$(PIP) install -r requirements.txt --break-system-packages
 
 test:
 	$(PYTHON) examples/run_quickstart_demo.py
