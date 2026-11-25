@@ -18,6 +18,28 @@ This repository contains code, input workbooks, archived JSON results, and analy
 - `USER_GUIDE.md` and `TUTORIAL.md`: user and workflow documentation.
 - `LICENSE`: GNU General Public License, version 2.
 
+## Repository Structure
+
+```text
+paper_fbhp_automl_open/
+├── data/                                # Excel input workbooks for the FBHP datasets
+├── json_automl_f1/                      # Archived AutoML run records in JSON format
+├── tab/                                 # Existing analysis tables, primarily LaTeX
+├── img/                                 # Existing figures and comparative plots
+├── examples/
+│   └── run_quickstart_demo.py           # Synthetic-data scikit-learn smoke test
+├── read_data_fbhp.py                    # Dataset loading and train/test split functions
+├── fbhp_automl_comparison_v_0p3.py      # AutoML training and JSON result generation
+├── fbhp_automl_analysis_v_0p3.py        # Statistical analysis, tables, and plotting
+├── makefile                             # Convenience targets for install, test, train, analyze
+├── requirements.txt                     # Base Python dependencies
+├── environment.yml                      # Conda environment specification
+├── USER_GUIDE.md                        # Inputs, outputs, options, and known limitations
+├── TUTORIAL.md                          # Step-by-step workflows
+├── LICENSE                              # GNU General Public License, version 2
+└── README.md                            # Project overview, installation, and usage
+```
+
 ## Requirements
 
 The analysis and demonstration scripts require Python and the packages listed in `requirements.txt`. `environment.yml` describes a Conda environment based on Python 3.10. The main training script also has optional framework-specific dependencies. Their installation is platform- and version-sensitive; install only the frameworks you intend to run, and record the exact package versions and environment used for the reported experiments. The repository currently does not provide a complete, version-pinned environment for all seven backends.
