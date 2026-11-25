@@ -1,36 +1,95 @@
-# Makefile for paper_fbhp_automl_open
-# Provides standardized commands for environment setup, verification, and reproducibility.
+# User Guide — paper_fbhp_automl_open
 
-PYTHON ?= python3
-PIP ?= pip
+This document describes the inputs, outputs, configuration options, and expected behaviour of the FBHP AutoML reproducibility package that accompanies the manuscript.
 
-.PHONY: help install test analysis comparison all clean
+Repository: https://github.com/LGoliatt/paper_fbhp_automl_open
 
-help:
-	@echo "Available targets for paper_fbhp_automl_open:"
-	@echo "  make install     - Install Python dependencies from requirements.txt"
-	@echo "  make test        - Run the quickstart verification script (examples/run_quickstart_demo.py)"
-	@echo "  make analysis    - Run AutoML training and evaluation (fbhp_automl_analysis_v_0p3.py)"
-	@echo "  make comparison  - Generate tables (tab/) and figures (img/) from json_automl_f1/"
-	@echo "  make all         - Run both analysis and comparison pipelines sequentially"
-	@echo "  make clean       - Remove temporary Python cache files and demo outputs"
+---
 
-install:
-	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements.txt
+## 1. Purpose
 
-test:
-	$(PYTHON) examples/run_quickstart_demo.py
+The package implements a reproducible pipeline for predicting **Flowing Bottom-Hole Pressure (FBHP / \(P_{wf}\))** in multiphase oil and gas wells using Automated Machine Learning (AutoML) frameworks. It provides:
 
-analysis:
-	$(PYTHON) read_data_fbhp.py
-	$(PYTHON) fbhp_automl_analysis_v_0p3.py
+- data loading and preprocessing for two public field datasets and a synthetic test case;
+- multi-framework AutoML training with fixed random seeds;
+- structured JSON logging of predictions, metrics and run metadata;
+- statistical comparison, tables and publication-ready figures.
 
-comparison:
-	$(PYTHON) fbhp_automl_comparison_v_0p3.py
+---
 
-all: analysis comparison
+## 2. Input data
 
-clean:
-	rm -rf __pycache__ examples/__pycache__ examples/demo_output
-	find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} +
+### 2.1 Field datasets (provided)
+
+| Dataset key | Source folder | Description |
+|-------------|---------------|-------------|
+| `F1` | `data/data_shammari/` | Al-Shammari workbook (`al_shammari.xlsx`) |
+| `F2` | `data/data_nwanwe/` | Nwanwe workbook (`nwanwe.xlsx`) with Train / Test sheets |
+
+Loader module: `read_data_fbhp.py`.
+
+Expected target column name: **`FBHP`** (or `Pwf` in the synthetic demo).
+
+Typical input features (oilfield units):
+
+| Feature | Description | Unit |
+|---------|-------------|------|
+| `Qo` | Oil rate | bbl/day |
+| `Qg` | Gas rate | mscf/day |
+| `Qw` | Water rate | bbl/day |
+| `Id` | Tubing inner diameter | in |
+| `Depth` | Well depth / TVD | ft |
+| `Api` | Oil gravity | °API |
+| `St` | Surface temperature | °F |
+| `Bt` | Bottom-hole temperature | °F |
+| `Pwh` | Wellhead pressure | psia |
+
+The exact column set is taken from the workbook after dropping identifier columns such as `SN`.
+
+### 2.2 Synthetic dataset (for testing)
+
+`examples/run_quickstart_demo.py` generates a physics-inspired synthetic multiphase dataset (default 220 samples) with the same feature names and target `Pwf`. Outputs are written only under `examples/demo_output/` and **do not** overwrite manuscript artefacts in `tab/` or `img/`.
+
+### 2.3 Custom data
+
+You may point the training script to your own `.xlsx` file (see CLI options below). Requirements:
+
+- numeric target column named `FBHP`;
+- numeric input feature columns;
+- optional identifier column `SN` (will be dropped).
+
+---
+
+## 3. Main modules and expected behaviour
+
+### 3.1 `read_data_fbhp.py`
+
+**Role:** load and split the chosen dataset.
+
+**Key function:** `read_fbhp(dataset)` where `dataset` is `'F1'` or `'F2'`.
+
+**Returns** a dictionary with:
+
+- `feature_names`, `target_names`
+- `X_train`, `y_train`, `X_test`, `y_test`
+- `n_samples`, `n_features`, `task` (`'regression'`)
+- `reference` (DOI / URL of the data source)
+
+When run as a script it prints basic dataset information.
+
+### 3.2 `fbhp_automl_comparison_v_0p3.py` (training / benchmarking)
+
+**Role:** train selected AutoML frameworks and write one JSON record per framework and run.
+
+**Default frameworks:** Fedot, AutoSklearn, TPOT, AutoGluon, AutoKeras, H2O, FLAML.
+
+**CLI options (selected):**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--dataset` | `F1` | `F1`, `F2`, `SYN` or `CUSTOM` |
+| `--data-file` | `None` | Path to custom `.xlsx` (required with `CUSTOM`) |
+| `--frameworks` | paper set | Space-separated list of frameworks |
+| `--runs` | `30` | Number of independent runs |
+| `--start-run` | `0` | First run index (resume support) |
+| `--time-budget` | `240` | Seconds per AutoML run |
