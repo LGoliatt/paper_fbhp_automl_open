@@ -7,14 +7,15 @@ This script compares several AutoML frameworks on FBHP datasets.
 
 Main steps:
 - Load FBHP datasets using `read_fbhp`.
-- Train multiple AutoML frameworks (AutoSklearn, TPOT, AutoGluon, AutoKeras,
-  H2O AutoML, FLAML; optionally Fedot and TabPFN).
+- Train multiple AutoML frameworks (FEDOT, AutoSklearn, TPOT, AutoGluon,
+  AutoKeras, H2O AutoML, FLAML; optionally TabPFN and EvalML). Choose them
+  with --frameworks; see --help for all options.
 - Evaluate models using R² and RMSE, and compute permutation feature
   importance (see `permutation_feature_importance` and scikit-learn's
-  permutation importance documentation for the underlying concept). [web:6][web:9][web:35]
+  permutation importance documentation for the underlying concept).
 - Perform a simple uncertainty analysis by sampling the input space.
 - Save experiment metadata and results as JSON, converting NumPy types via
-  `converter_numpy`. [web:33][web:36]
+  `converter_numpy`.
 """
 
 # =============================================================================
@@ -36,26 +37,50 @@ from sklearn.metrics import (
     # root_mean_squared_error,
 )
 
-# AutoML frameworks
+# AutoML frameworks.
+# Every framework is imported defensively so that a subset can be run without
+# installing the others (select them with --frameworks).
 autosklearn_v1 = False
 try:
     # Preferred: official auto-sklearn
     from autosklearn.regression import AutoSklearnRegressor
     autosklearn_v1 = True
 except ImportError:
-    # Fallback: lightweight auto_sklearn2 package
-    from auto_sklearn2 import AutoSklearnRegressor
+    try:
+        # Fallback: lightweight auto_sklearn2 package
+        from auto_sklearn2 import AutoSklearnRegressor
+    except ImportError:
+        AutoSklearnRegressor = None
 
 try:
     from evalml.automl import AutoMLSearch
 except ImportError:
     AutoMLSearch = None  # EvalML is optional
 
-from flaml import AutoML
-from tpot import TPOTRegressor
-from autokeras import StructuredDataRegressor
-from autogluon.tabular import TabularPredictor
-from fedot.api.main import Fedot
+try:
+    from flaml import AutoML
+except ImportError:
+    AutoML = None
+
+try:
+    from tpot import TPOTRegressor
+except ImportError:
+    TPOTRegressor = None
+
+try:
+    from autokeras import StructuredDataRegressor
+except ImportError:
+    StructuredDataRegressor = None
+
+try:
+    from autogluon.tabular import TabularPredictor
+except ImportError:
+    TabularPredictor = None
+
+try:
+    from fedot.api.main import Fedot
+except ImportError:
+    Fedot = None
 
 tbpfn_ok = False
 try:
@@ -65,8 +90,12 @@ try:
 except ImportError:
     TabPFNRegressor = None  # TabPFN is optional
 
-import h2o
-from h2o.automl import H2OAutoML
+try:
+    import h2o
+    from h2o.automl import H2OAutoML
+except ImportError:
+    h2o = None
+    H2OAutoML = None
 
 # Local data loader (provides `read_fbhp` and dataset structure)
 from read_data_fbhp import read_fbhp
@@ -84,16 +113,93 @@ np.object = object      # type: ignore[attr-defined]
 
 pd.options.display.float_format = "{:.3f}".format
 
-# Initialize H2O cluster
-h2o.init()
+# Frameworks of the paper (default) and extra lightweight baselines that are
+# only meant for quick tests (see examples/smoke_test.py).
+PAPER_FRAMEWORKS = ["Fedot", "AutoSklearn", "TPOT", "AutoGluon", "AutoKeras", "H2O", "FLAML"]
+OPTIONAL_FRAMEWORKS = ["TabPFN", "EvalML", "RandomForest", "HistGB"]
+FRAMEWORK_CLASS = {
+    "Fedot": lambda: Fedot,
+    "AutoSklearn": lambda: AutoSklearnRegressor,
+    "TPOT": lambda: TPOTRegressor,
+    "AutoGluon": lambda: TabularPredictor,
+    "AutoKeras": lambda: StructuredDataRegressor,
+    "H2O": lambda: H2OAutoML,
+    "FLAML": lambda: AutoML,
+    "TabPFN": lambda: TabPFNRegressor,
+    "EvalML": lambda: AutoMLSearch,
+    "RandomForest": lambda: True,
+    "HistGB": lambda: True,
+}
+
+
+def parse_args(argv=None):
+    """Command line options. The defaults reproduce the protocol of the paper."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Benchmark AutoML frameworks on the FBHP datasets and save one JSON "
+                    "file per framework and run."
+    )
+    parser.add_argument("--dataset", default="F1", choices=["F1", "F2", "SYN", "CUSTOM"],
+                        help="F1 = Al-Shammari, F2 = Nwanwe, SYN = synthetic test data, "
+                             "CUSTOM = your own workbook given with --data-file (default: F1).")
+    parser.add_argument("--data-file", default=None,
+                        help="Path of an .xlsx workbook, required with --dataset CUSTOM. It needs a numeric "
+                             "target column named FBHP, numeric input columns and an optional SN column.")
+    parser.add_argument("--n-train", type=int, default=None,
+                        help="Number of leading rows used for training with --dataset CUSTOM "
+                             "(default: 75%% of the rows).")
+    parser.add_argument("--frameworks", nargs="+", default=PAPER_FRAMEWORKS,
+                        help="Frameworks to run (case insensitive). Default: " + " ".join(PAPER_FRAMEWORKS)
+                             + ". Also available: " + " ".join(OPTIONAL_FRAMEWORKS) + ".")
+    parser.add_argument("--runs", type=int, default=30,
+                        help="Run indices go from --start-run up to --runs - 1 (default: 30).")
+    parser.add_argument("--start-run", type=int, default=0,
+                        help="First run index; use it to resume an interrupted benchmark (default: 0).")
+    parser.add_argument("--time-budget", type=int, default=240,
+                        help="Time budget in seconds given to each AutoML run (default: 240).")
+    parser.add_argument("--epochs", type=int, default=100,
+                        help="Training epochs for AutoKeras (default: 100).")
+    parser.add_argument("--pfi-repeats", type=int, default=30,
+                        help="Permutations per feature for permutation importance (default: 30).")
+    parser.add_argument("--uncertainty-samples", type=int, default=100_000,
+                        help="Points sampled for the uncertainty analysis (default: 100000).")
+    parser.add_argument("--out-dir", default=None,
+                        help="Folder for the JSON results (default: ./json_automl_<dataset>).")
+    args, _ = parser.parse_known_args(argv)
+
+    lookup = {name.lower(): name for name in PAPER_FRAMEWORKS + OPTIONAL_FRAMEWORKS}
+    selected = []
+    for name in args.frameworks:
+        if name.lower() not in lookup:
+            parser.error(f"unknown framework '{name}'. Choose from: "
+                         + ", ".join(PAPER_FRAMEWORKS + OPTIONAL_FRAMEWORKS))
+        selected.append(lookup[name.lower()])
+    args.frameworks = selected
+    return args
+
+
+args = parse_args()
 
 # Experiment configuration
 BASENAME = "fbhp_automl_"
-TIME_BUDGET = 240          # seconds per AutoML run
-N_RUNS = 30
-EPOCHS = 100               # for AutoKeras
+TIME_BUDGET = args.time_budget      # seconds per AutoML run
+N_RUNS = args.runs
+EPOCHS = args.epochs                # for AutoKeras
 DEFAULT_SCORING = "neg_root_mean_squared_error"
-N_REPEATS = 30            # for feature importance
+N_REPEATS = args.pfi_repeats        # for feature importance
+frameworks = args.frameworks
+
+missing = [f for f in frameworks if FRAMEWORK_CLASS[f]() is None]
+if missing:
+    raise ImportError(
+        "These frameworks are selected but not installed: " + ", ".join(missing)
+        + ". Install them (see requirements-automl.txt) or choose another set with --frameworks."
+    )
+
+# Initialize the H2O cluster only when H2O is requested
+if "H2O" in frameworks:
+    h2o.init()
 
 # =============================================================================
 # Helper functions
@@ -104,7 +210,7 @@ def converter_numpy(obj):
 
     This helper is used as `default=converter_numpy` in `json.dump` to
     avoid "NumPy array is not JSON serializable" errors when saving
-    experiment results. [web:33][web:36]
+    experiment results.
 
     Parameters
     ----------
@@ -127,7 +233,7 @@ def converter_numpy(obj):
         return float(obj)
     if isinstance(obj, np.ndarray):
         return obj.tolist()
-    raise TypeError(f"Objeto do tipo {type(obj)} não é serializável em JSON")
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
 def permutation_feature_importance(
@@ -145,7 +251,7 @@ def permutation_feature_importance(
 
     Follows the same idea as scikit-learn's permutation importance:
     shuffle each feature column independently and measure the degradation
-    in performance (increase in the chosen metric). [web:6][web:9][web:35]
+    in performance (increase in the chosen metric).
 
     Parameters
     ----------
@@ -228,18 +334,16 @@ def permutation_feature_importance(
 # Main experiment loop
 # =============================================================================
 
-for run in range(3, N_RUNS):
+for run in range(args.start_run, N_RUNS):
     # Seed schedule for reproducibility across frameworks
     seed = run * 37 + 1001
+    np.random.seed(seed)  # also seeds permutation importance and uncertainty sampling
     print("=" * 80)
     print(f"Run {run:02d} (seed={seed})")
     print("=" * 80)
 
     # Datasets to evaluate (extend this list if needed)
-    datasets = [
-        read_fbhp("F1"),
-        # read_fbhp("F2"),
-    ]
+    datasets = [read_fbhp(args.dataset, fn=args.data_file, n_train=args.n_train)]
 
     for dataset in datasets:
         dataset_base_name = dataset["name"]
@@ -249,8 +353,8 @@ for run in range(3, N_RUNS):
 
         # Output directory for this dataset
         dr = dataset_base_name.replace(" ", "_").replace("'", "").lower()
-        path = f"./json_automl_{dr}/"
-        os.system("mkdir -p " + path.replace(" ", "_").replace("-", "_").lower())
+        path = f"./json_automl_{dr}/" if args.out_dir is None else args.out_dir.rstrip("/") + "/"
+        os.makedirs(path, exist_ok=True)
 
         for tk, tn in enumerate(dataset["target_names"]):
             target = dataset["target_names"][tk]
@@ -290,19 +394,19 @@ for run in range(3, N_RUNS):
             test_data = pd.DataFrame(X_test, columns=feature_names)
             test_data[target] = y_test
 
-            train_df = h2o.H2OFrame(train_data)
-            test_df = h2o.H2OFrame(test_data)
+            if "H2O" in frameworks:
+                train_df = h2o.H2OFrame(train_data)
+                test_df = h2o.H2OFrame(test_data)
 
             # ----------------------------------------------------------------
             # Framework-specific configuration
             # ----------------------------------------------------------------
             # FLAML
-            flaml = AutoML()
             flaml_settings = {
                 "time_budget": TIME_BUDGET,
                 "metric": "rmse",
                 "task": "regression",
-                "log_file_name": "ucs.log",
+                "log_file_name": "flaml.log",
                 "estimator_list": [
                     "lgbm",
                     "rf",
@@ -318,7 +422,7 @@ for run in range(3, N_RUNS):
             }
 
             # TPOT
-            pipeline_optimizer = TPOTRegressor(
+            tpot_params = dict(
                 generations=20,
                 population_size=20,
                 cv=5,
@@ -364,7 +468,7 @@ for run in range(3, N_RUNS):
                 }
 
             # Data for uncertainty analysis
-            n_outcomes = 100_000
+            n_outcomes = args.uncertainty_samples
             data = np.random.uniform(
                 low=X_test.min(axis=0),
                 high=X_test.max(axis=0),
@@ -374,16 +478,7 @@ for run in range(3, N_RUNS):
             # ----------------------------------------------------------------
             # AutoML frameworks to evaluate
             # ----------------------------------------------------------------
-            frameworks = [
-                "Fedot",
-                #"AutoSklearn",
-                #"TPOT",
-                #"AutoGluon",
-                #"AutoKeras",
-                #"H2O",
-                #"FLAML",
-                ## "TabPFN",
-            ]
+            # `frameworks` is defined at the top of the file (--frameworks).
 
             for auto in frameworks:
                 start_time = time.time()
@@ -431,7 +526,7 @@ for run in range(3, N_RUNS):
                     y_pred = automl.predict(X_test)
 
                 elif auto == "FLAML":
-                    automl = flaml
+                    automl = AutoML()
                     automl.fit(
                         X_train=X_train,
                         y_train=y_train,
@@ -440,7 +535,7 @@ for run in range(3, N_RUNS):
                     y_pred = automl.predict(X_test)
 
                 elif auto == "TPOT":
-                    automl = pipeline_optimizer
+                    automl = TPOTRegressor(**tpot_params)
                     automl.fit(X_train, y_train)
                     y_pred = automl.predict(X_test)
 
@@ -493,6 +588,20 @@ for run in range(3, N_RUNS):
                         .ravel()
                     )
 
+                elif auto == "RandomForest":
+                    from sklearn.ensemble import RandomForestRegressor
+                    automl = RandomForestRegressor(
+                        n_estimators=200, random_state=seed, n_jobs=-1
+                    )
+                    automl.fit(X_train, y_train)
+                    y_pred = automl.predict(X_test)
+
+                elif auto == "HistGB":
+                    from sklearn.ensemble import HistGradientBoostingRegressor
+                    automl = HistGradientBoostingRegressor(random_state=seed)
+                    automl.fit(X_train, y_train)
+                    y_pred = automl.predict(X_test)
+
                 else:
                     continue
 
@@ -530,6 +639,8 @@ for run in range(3, N_RUNS):
                     "TPOT",
                     "AutoSklearn",
                     "AutoKeras",
+                    "RandomForest",
+                    "HistGB",
                 ]:
                     predict = automl.predict(data)
                     if hasattr(predict, "ravel"):

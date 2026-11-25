@@ -65,7 +65,7 @@ def calculate_taylor_metrics(y_true, y_pred):
 
 def load_json_data(folder_path):
     results, uncertainty, times = [], [], []
-    for filepath in glob.glob(os.path.join(folder_path, '*.json')):
+    for filepath in sorted(glob.glob(os.path.join(folder_path, '*.json'))):
         with open(filepath, 'r') as f:
             try:
                 data = json.load(f)[0]
@@ -100,20 +100,20 @@ def load_json_data(folder_path):
 
 def filter_models(df, models_to_remove):
     """
-    Remove linhas de um DataFrame cujos modelos estão na lista de exclusão.
-    A função também remove modelos com o sufixo '-FS'.
+    Remove the rows of a DataFrame whose model is in the exclusion list.
+    Models carrying the '-FS' suffix are removed as well.
 
-    Parâmetros:
-    - df (pd.DataFrame): DataFrame com coluna 'Model'
-    - models_to_remove (list): Lista de nomes de modelos a remover (ex: ['RF', 'ANN'])
+    Parameters:
+    - df (pd.DataFrame): DataFrame with a 'Model' column.
+    - models_to_remove (list): Model names to remove (e.g. ['RF', 'ANN']).
 
-    Retorna:
-    - pd.DataFrame filtrado
+    Returns:
+    - pd.DataFrame: the filtered DataFrame.
     """
-    # Inclui versões com sufixo '-FS'
+    # Include the versions carrying the '-FS' suffix
     full_models_to_remove = models_to_remove + [m + '-FS' for m in models_to_remove]
     
-    # Remove modelos com ou sem sufixo
+    # Remove models with or without the suffix
     return df[~df['Model'].str.split('-').str[0].isin(full_models_to_remove)]
 
 
@@ -467,7 +467,7 @@ def analyze_feature_selection(models_to_remove, folder_path, save_fig=False, out
 
     freq = defaultdict(lambda: defaultdict(int))
     all_features = set()
-    for file in glob.glob(os.path.join(folder_path, '*.json')):
+    for file in sorted(glob.glob(os.path.join(folder_path, '*.json'))):
         with open(file, 'r') as f:
             data = json.load(f)[0]
             model = data.get('estimator', '')
@@ -485,7 +485,7 @@ def analyze_feature_selection(models_to_remove, folder_path, save_fig=False, out
     # plt.figure(figsize=(7, 4))
     # sns.barplot(data=df_long, x='index', y='Percentage', hue='Feature', palette='tab10')
     # #plt.title("Feature Selection Frequency (\%)")
-    # plt.ylabel("Feature Selection Frequency (\%)")
+    # plt.ylabel(r"Feature Selection Frequency (\%)")
     # plt.xticks(rotation=45)
     # plt.tight_layout()
     # plt.xlabel(None)
@@ -501,7 +501,7 @@ def analyze_feature_selection(models_to_remove, folder_path, save_fig=False, out
     for container in ax.containers:
         ax.bar_label(container, fmt='%.0f%%', label_type='edge', fontsize=10, padding=3, )
     
-    plt.ylabel("Feature Selection Frequency (\%)")
+    plt.ylabel(r"Feature Selection Frequency (\%)")
     plt.xticks(rotation=0)
     plt.ylim([0,110])
     plt.xlabel('')
@@ -524,7 +524,7 @@ def plot_feature_pareto(refname, folder_path, save_fig=False, output_dir='./img'
         os.makedirs(output_dir)
 
     model_features = defaultdict(Counter)
-    for file in glob.glob(os.path.join(folder_path, '*.json')):
+    for file in sorted(glob.glob(os.path.join(folder_path, '*.json'))):
         with open(file, 'r') as f:
             data = json.load(f)[0]
             model = data.get('model_name', '')
@@ -586,7 +586,7 @@ def run_anova_and_tukey(df, metrics=METRICS):
                               })
 
     # Convert to DataFrame and pivot to get metrics as columns
-    anova_df = pd.DataFrame(anova_results).set_index('Metric').T
+    anova_df = pd.DataFrame(anova_results).set_index('Metric').T.astype(object)
 
     # Reformat p-values to scientific (exponential) notation
     anova_df.loc['p-value'] = anova_df.loc['p-value'].apply(lambda x: f"{x:.3e}")
@@ -614,40 +614,43 @@ def run_bootstrap(df, metrics=METRICS, model_col="Model", n_boot=20_000,
                    ci=95, random_state=42,save_fig=False, output_dir='.',
                    out_dir=".", out_prefix="bootstrap_summary_table"):
     """
-    Calcula um score composto (media normalizada das metricas) por linha,
-    faz bootstrap por modelo para estimar media + intervalo de confianca,
-    e salva os resultados em CSV, tabela LaTeX e figura (barras + IC).
+    Compute a composite score (normalised mean of the metrics) for each row,
+    bootstrap it per model to estimate the mean and a confidence interval,
+    and save the results as a CSV file, a LaTeX table and a figure
+    (bars + confidence interval).
 
-    Parametros
+    Parameters
     ----------
     df : pd.DataFrame
-        DataFrame contendo uma coluna `model_col` e as colunas de `metrics`.
-    metrics : dict[str, bool]
-        Mapa {nome_da_coluna: maior_e_melhor}. Default = METRICS.
+        DataFrame with a `model_col` column and the columns listed in `metrics`.
+    metrics : list[str]
+        Names of the metric columns. Metrics listed in `metrics_max` are
+        treated as higher-is-better; all others as lower-is-better.
+        Default = METRICS.
     model_col : str
-        Nome da coluna que identifica o modelo.
+        Name of the column that identifies the model.
     n_boot : int
-        Numero de reamostragens bootstrap.
+        Number of bootstrap resamples.
     ci : float
-        Nivel do intervalo de confianca (ex.: 95 -> IC 95%).
+        Confidence level of the interval (e.g. 95 -> 95% CI).
     random_state : int
-        Semente para reprodutibilidade.
+        Seed for reproducibility.
     out_dir : str
-        Diretorio de saida para os 3 arquivos gerados.
+        Output folder for the CSV and LaTeX files.
     out_prefix : str
-        Prefixo usado nos nomes dos arquivos de saida.
+        Prefix of the output file names.
 
-    Retorna
+    Returns
     -------
     bootstrap_df : pd.DataFrame
-        Tabela resumo (indexada por modelo) com score medio, IC, std, sem,
-        rank e probabilidade de ser o melhor modelo.
+        Summary table (indexed by model) with mean score, CI, std, sem,
+        rank and probability of being the best model.
     paths : dict[str, str]
-        Caminhos dos 3 arquivos salvos: {"csv", "latex", "figure"}.
+        Paths of the 3 saved files: {"csv", "latex", "figure"}.
     """
     rng = np.random.default_rng(random_state)
 
-    # --- normaliza cada metrica para [0,1], com sinal ajustado ---
+    # --- normalise each metric to [0, 1], sign-adjusted so that higher is better ---
     norm = df.copy()
     for col in metrics:
         mn, mx = df[col].min(), df[col].max()
@@ -658,7 +661,7 @@ def run_bootstrap(df, metrics=METRICS, model_col="Model", n_boot=20_000,
     df = df.copy()
     df["score"] = norm[score_cols].mean(axis=1)
 
-    # --- bootstrap por modelo ---
+    # --- bootstrap per model ---
     alpha = (100 - ci) / 2
     rows, boot_dists = [], {}
     for model, g in df.groupby(model_col):
@@ -684,8 +687,8 @@ def run_bootstrap(df, metrics=METRICS, model_col="Model", n_boot=20_000,
     bootstrap_df = bootstrap_df.reset_index(drop=True)
     bootstrap_df["rank"] = bootstrap_df.index + 1
 
-    # probabilidade de cada modelo ser o melhor, via comparacao das
-    # distribuicoes bootstrap
+    # probability of each model being the best, by comparing the
+    # bootstrap distributions
     models = bootstrap_df[model_col].tolist()
     boot_matrix = np.vstack([boot_dists[m] for m in models])
     best_idx = np.argmax(boot_matrix, axis=0)
@@ -693,11 +696,11 @@ def run_bootstrap(df, metrics=METRICS, model_col="Model", n_boot=20_000,
 
     bootstrap_df = bootstrap_df.set_index(model_col)
 
-    # --- salva CSV ---
+    # --- save CSV ---
     csv_path = f"{out_dir}/{out_prefix}.csv"
     bootstrap_df.to_csv(csv_path)
 
-    # --- salva tabela LaTeX ---
+    # --- save LaTeX table ---
     latex_path = f"{out_dir}/{out_prefix}.tex"
     bootstrap_latex = bootstrap_df.round(4).to_latex(
         caption="Bootstrap summary for the composite performance score across models.",
@@ -709,7 +712,7 @@ def run_bootstrap(df, metrics=METRICS, model_col="Model", n_boot=20_000,
     with open(latex_path, "w") as f:
         f.write(bootstrap_latex)
 
-    # --- salva figura ---
+    # --- save figure ---
     fig_path = f"{out_dir}/{out_prefix}.png"
     plot_df = bootstrap_df.sort_values("score_mean", ascending=True)
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -749,7 +752,7 @@ def plot_taylor_diagram(refname, folder_path, save_fig=False, output_dir='./img'
     if save_fig and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    files = glob.glob(os.path.join(folder_path, '*.json'))
+    files = sorted(glob.glob(os.path.join(folder_path, '*.json')))
     results = []
     for file in files:
         with open(file, 'r') as f:
@@ -832,8 +835,8 @@ def plot_feature_importance(refname, folder_path, save_fig=False, output_dir='./
     model_feature_importance = defaultdict(lambda: defaultdict(list))
     all_features = set()
 
-    # Coleta os dados
-    for file in glob.glob(os.path.join(folder_path, '*.json')):
+    # Collect the data
+    for file in sorted(glob.glob(os.path.join(folder_path, '*.json'))):
         with open(file, 'r') as f:
             data = json.load(f)[0]
             model = data.get('estimator', 'unknown')
@@ -857,7 +860,7 @@ def plot_feature_importance(refname, folder_path, save_fig=False, output_dir='./
     all_features = sorted(list(all_features))
 
     for model, feat_dict in model_feature_importance.items():
-        # Cria lista de registros por execução
+        # Build the list of records per run
         exec_data = []
         max_len = max(len(v) for v in feat_dict.values())
 
@@ -899,7 +902,7 @@ def plot_feature_importance(refname, folder_path, save_fig=False, output_dir='./
         df_mean = df.mean()
         df_std = df.std()
 
-        # Gráfico
+        # Plot
         x = np.arange(len(all_features))
         plt.figure(figsize=(4, 4))
         plt.bar(x, df_mean.values, #yerr=df_std.values, 
@@ -922,13 +925,14 @@ def plot_feature_importance(refname, folder_path, save_fig=False, output_dir='./
 # --- 7. PARAMETRIC ANALYSIS ---
 def plot_model_params_distribution(refname, folder_path='./json-files', save_fig=False, output_dir='./img'):
     """
-    Gera gráficos para os parâmetros dos modelos salvos em arquivos JSON.
-    Gera boxplots para variáveis contínuas e barplots para variáveis discretas com até 7 valores únicos.
+    Plot the distribution of the model parameters stored in the JSON files.
+    Draws boxplots for continuous variables and barplots for discrete
+    variables with at most 7 unique values.
 
-    Parâmetros:
-    - folder_path (str): caminho da pasta com os arquivos JSON.
-    - save_fig (bool): se True, salva os gráficos em vez de exibir.
-    - output_dir (str): pasta onde salvar os gráficos (usado se save_fig=True).
+    Parameters:
+    - folder_path (str): folder containing the JSON files.
+    - save_fig (bool): if True, save the figures instead of showing them.
+    - output_dir (str): folder where the figures are saved (used if save_fig=True).
     """
 
   
@@ -938,7 +942,7 @@ def plot_model_params_distribution(refname, folder_path='./json-files', save_fig
 
     param_data_2 = defaultdict(lambda: defaultdict(list))
 
-    for file_name in os.listdir(folder_path):
+    for file_name in sorted(os.listdir(folder_path)):
         if file_name.endswith('.json'):
             with open(os.path.join(folder_path, file_name), 'r') as f:
                 data = json.load(f)[0]
@@ -1017,16 +1021,16 @@ def format_df_table(df, ref_colum, columns, nam):
 
 def generate_latex_figures_from_folder(compute_performance_index, folder_path="./img", output_tex_path="insert_all_figures_from_folder.tex"):
     """
-    Gera comandos LaTeX para incluir todas as imagens PNG em uma pasta.
+    Generate LaTeX commands that include every PNG image of a folder.
     
     Args:
-        folder_path (str): Caminho para a pasta contendo arquivos .png.
-        output_tex_path (str): Caminho do arquivo .tex a ser salvo.
+        folder_path (str): Folder containing the .png files.
+        output_tex_path (str): Path of the .tex file to write.
         
     Returns:
-        str: Caminho do arquivo gerado.
+        str: Path of the generated file.
     """
-    # Lista todos os arquivos .png
+    # List all .png files
     png_files = sorted([f for f in os.listdir(folder_path) if f.endswith(".png")])
 
     # Monta os comandos LaTeX
@@ -1044,7 +1048,7 @@ def generate_latex_figures_from_folder(compute_performance_index, folder_path=".
 
 """
 
-    # Salva em arquivo .tex
+    # Save to a .tex file
     with open(output_tex_path, "w") as f:
         f.write(latex_figures)
 
@@ -1058,7 +1062,7 @@ def plot_best_run_per_model(refname, models_to_remove, folder_path, save_fig=Fal
 
 
     all_results = []
-    for filepath in glob.glob(os.path.join(folder_path, '*.json')):
+    for filepath in sorted(glob.glob(os.path.join(folder_path, '*.json'))):
         with open(filepath, 'r') as f:
             try:
                 data = json.load(f)[0]
@@ -1141,11 +1145,11 @@ def plot_best_run_per_model(refname, models_to_remove, folder_path, save_fig=Fal
 
 
 
-# Carregar arquivos e separar por tipo de alvo
+# Load the files and group them by target
 def load_grouped_json_files(folder_path):
     ucs_files = []
 
-    for filename in os.listdir(folder_path):
+    for filename in sorted(os.listdir(folder_path)):
         if filename.endswith('.json'):
             file_path = os.path.join(folder_path, filename)
             with open(file_path, 'r') as f:
@@ -1154,7 +1158,7 @@ def load_grouped_json_files(folder_path):
                
     return ucs_files
 
-# Extrair importâncias das features por grupo de arquivos
+# Extract feature importances for each group of files
 def extract_feature_importances(json_files):
     feature_importances = {}
 
@@ -1191,7 +1195,7 @@ def extract_feature_importances(json_files):
                     feature_importances[feature] = {}
                 feature_importances[feature][model] = importances[i]
 
-    # Converter para DataFrame por feature
+    # Convert to one DataFrame per feature
     dfs = {}
     for feature, values in feature_importances.items():
         dfs[feature] = pd.Series(values).sort_index()
@@ -1225,7 +1229,7 @@ def plotl_feature_importances(
         → automatically adds "(Log Scale)" to ylabel + nice scientific ticks
         → filename gets _log suffix
     """
-    # --- 1. Preparação dos Dados (unchanged) ---
+    # --- 1. Data preparation (unchanged) ---
     features = list(data.keys())
     models = sorted({model for feature_values in data.values()
                      for model in feature_values.index})
@@ -1259,7 +1263,7 @@ def plotl_feature_importances(
     else:
         sorted_features = features
    
-    # --- 2. Configuração do Gráfico ---
+    # --- 2. Plot configuration ---
     plt.style.use(['seaborn-v0_8-paper', 'seaborn-v0_8-whitegrid'])
     sns.set_palette(color_palette)
     colors = sns.color_palette(color_palette, n_colors=len(models))
@@ -1336,7 +1340,7 @@ def plotl_feature_importances(
             ylabel_text = 'Feature Importance'
         ax.set_ylabel(ylabel_text, fontsize=12)
    
-    # --- 4. Ajustes Estéticos (unchanged) ---
+    # --- 4. Aesthetic adjustments (unchanged) ---
     norm_text = " (Normalized)" if normalize else ""
     ax.set_title(f'{title}{norm_text}', fontsize=14, pad=15, weight='semibold')
    
@@ -1357,9 +1361,10 @@ def plotl_feature_importances(
     # --- 5. Salvando (with _log suffix when log_scale=True) ---
     orientation_code = 'horiz' if orientation == 'horizontal' else 'vert'
     log_code = '_log' if log_scale else ''
-    output_filename_base = f'./img/Feature_Importance_{title.replace(" ", "_")}_{orientation_code}{log_code}'
+    os.makedirs(FOLDER_FIG, exist_ok=True)
+    output_filename_base = f'{FOLDER_FIG}/Feature_Importance_{title.replace(" ", "_")}_{orientation_code}{log_code}'
    
-    print(f"✅ Salvando gráficos em {output_filename_base}.png e .pdf")
+    print(f"Saving figures to {output_filename_base}.png and .pdf")
     plt.savefig(f'{output_filename_base}.png', dpi=300, bbox_inches='tight',
                 facecolor='white', edgecolor='none')
     plt.savefig(f'{output_filename_base}.pdf', bbox_inches='tight',
@@ -1384,7 +1389,7 @@ def analyze_training_times(df_time,
     if save_fig and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    # ── 1. FULL STATISTICS (exact from your 40 runs) ─────────────────────
+    # ── 1. FULL STATISTICS (over all available runs) ─────────────────────
     stats = (df_time
              .groupby('Model')['Time (s)']
              .agg(['count', 'mean', 'std', 'min', 'median', 'max'])
@@ -1440,7 +1445,7 @@ def analyze_training_times(df_time,
 
         ax.set_xlabel('Training Time (seconds)', fontsize=14, fontweight='bold')
         ax.set_ylabel('')
-        ax.set_title(f'Training Time Distribution – {basename} (40 runs)', fontsize=16, pad=20)
+        ax.set_title(f'Training Time Distribution – {basename} (up to {int(stats["count"].max())} runs per model)', fontsize=16, pad=20)
         ax.grid(axis='x', linestyle='--', alpha=0.4)
         sns.despine(left=True)
 
@@ -1497,22 +1502,47 @@ def analyze_training_times(df_time,
 
 # --- MAIN EXECUTION ---
 
+import argparse
+
+
+def parse_args(argv=None):
+    """Command line options. The defaults reproduce the figures and tables of the paper."""
+    parser = argparse.ArgumentParser(
+        description="Analyse the JSON results written by fbhp_automl_comparison_v_0p3.py "
+                    "(metrics, ANOVA/Tukey, bootstrap, Taylor diagram, uncertainty, "
+                    "feature importance) and write figures and LaTeX tables."
+    )
+    parser.add_argument("--input-dir", default="./json_automl_f1",
+                        help="Folder with the JSON result files (default: ./json_automl_f1).")
+    parser.add_argument("--prefix", default="f1_",
+                        help="Prefix of the output file names (default: f1_).")
+    parser.add_argument("--fig-dir", default="./img",
+                        help="Output folder for figures (default: ./img).")
+    parser.add_argument("--tab-dir", default="./tab",
+                        help="Output folder for LaTeX tables (default: ./tab).")
+    parser.add_argument("--exclude", nargs="*", default=["AutoKeras", "TabPFN", "TabICL"],
+                        help="Estimators left out of the analysis "
+                             "(default: AutoKeras TabPFN TabICL). Use --exclude with no value to keep all.")
+    # parse_known_args keeps the script usable inside IPython/Spyder cells
+    args, _ = parser.parse_known_args(argv)
+    return args
+
+
+args = parse_args()
+FOLDER_FIG = args.fig_dir
+FOLDER_TAB = args.tab_dir
+
 save_fig = True
 
-CONFIG = [(f"f{i}_", f'./json_automl_f{i}') for i in range(1,2)]
+CONFIG = [(args.prefix, args.input_dir)]
 
 for BASENAME, FOLDER_PATH in CONFIG:    
     
-    print(f"Processando pasta: {FOLDER_PATH}")
+    print(f"Processing folder: {FOLDER_PATH}")
     
     refname = BASENAME.replace('_','').upper()
     df_results, df_uncertainty, df_time = load_json_data(FOLDER_PATH)
-    models_to_remove = [
-        'AutoKeras',
-        #'TPOT',
-        'TabPFN','TabICL',
-        #'H2O',
-        ]
+    models_to_remove = list(args.exclude)
     models_to_remove = models_to_remove + [m+'-FS' for m in models_to_remove]
     df_results = filter_models(df_results, models_to_remove)
     df_uncertainty = filter_models(df_uncertainty, models_to_remove)
@@ -1526,7 +1556,8 @@ for BASENAME, FOLDER_PATH in CONFIG:
 
     plot_model_metrics(refname, df_results, [m for m in METRICS if m != 'Time'], save_fig=save_fig, output_dir=FOLDER_FIG)
     run_anova_and_tukey(df_results)
-    bootstrap_df, paths = run_bootstrap(df_results, output_dir=FOLDER_FIG)
+    os.makedirs(FOLDER_TAB, exist_ok=True)
+    bootstrap_df, paths = run_bootstrap(df_results, output_dir=FOLDER_FIG, out_dir=FOLDER_TAB)
     
     time_stats = analyze_training_times(df_time, save_fig=True, output_dir=FOLDER_FIG,basename=BASENAME)
     
@@ -1553,7 +1584,7 @@ for BASENAME, FOLDER_PATH in CONFIG:
     # Extract dataaset name from JSON
     datasets = [entry['dataset'] for sublist in ucs_json for entry in sublist if 'dataset' in entry]
     if not datasets:
-        print(f"Aviso: Nenhum dataset encontrado em {folder_path}. Pulando.")
+        print(f"Warning: no dataset found in {FOLDER_PATH}. Skipping.")
         continue
     unique_dataset = list(set(datasets))[0].split('-')[0]
 
@@ -1573,5 +1604,7 @@ for BASENAME, FOLDER_PATH in CONFIG:
         value_format=".2f"
     )
     
-    os.system(f"mkdir -p {FOLDER_TAB}")
-    os.system(f"mv *.tex {FOLDER_TAB}")
+    os.makedirs(FOLDER_TAB, exist_ok=True)
+    import glob as _glob, shutil as _shutil
+    for _tex in _glob.glob("*.tex"):
+        _shutil.move(_tex, os.path.join(FOLDER_TAB, os.path.basename(_tex)))
