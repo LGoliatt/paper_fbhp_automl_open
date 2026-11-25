@@ -1,194 +1,109 @@
-# Flowing Bottom-Hole Pressure (FBHP) Prediction Using AutoML
+# Flowing Bottom-Hole Pressure Prediction Using AutoML
 
-[![License: GPL v2](https://img.shields.io/badge/License-GPL_v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+This repository contains code, input workbooks, archived JSON results, and analysis artifacts for a study of flowing bottom-hole pressure (FBHP, also denoted as `Pwf`) prediction in multiphase oil and gas wells.
 
-This repository provides the official open-source code, workflows, evaluation scripts, and reproducibility materials accompanying our manuscript on predicting Flowing Bottom-Hole Pressure (FBHP / $P_{wf}$) in multiphase oil and gas wells using Automated Machine Learning (AutoML).
+**Repository:** https://github.com/LGoliatt/paper_fbhp_automl_open
 
-> **Note for Reviewers & Users:** All datasets, intermediate JSON evaluation logs, output tables, and figures in this repository are stored in open, uncompressed formats (`.csv`, `.xlsx`, `.json`, `.tex`, `.png`, `.pdf`) to guarantee transparency, security compliance, and long-term reusability.
+> Before submission, include the public repository URL in the manuscript's Code Availability or Data and Code Availability statement. This repository does not contain the manuscript itself, so the manuscript link cannot be verified here.
 
----
+## What is included
 
-## Table of Contents
+- `read_data_fbhp.py`: loads the F1 (Al-Shammari) and F2 (Nwanwe) workbooks.
+- `fbhp_automl_comparison_v_0p3.py`: trains the selected AutoML frameworks and writes experiment records as JSON. Despite its filename, this is the training script.
+- `fbhp_automl_analysis_v_0p3.py`: reads experiment JSON files and produces statistical summaries, tables, and figures. Despite its filename, this is the analysis/plotting script.
+- `json_automl_f1/`: archived run records used as inputs to the analysis script.
+- `data/`: Excel input workbooks. Check the data-source terms before redistributing or reusing them.
+- `img/` and `tab/`: figures and tables already present in the repository.
+- `examples/run_quickstart_demo.py`: a small synthetic-data smoke test using scikit-learn estimators. It is not the paper's AutoML benchmark and does not validate all seven AutoML backends.
+- `USER_GUIDE.md` and `TUTORIAL.md`: user and workflow documentation.
+- `LICENSE`: GNU General Public License, version 2.
 
-1. [Repository Structure](#repository-structure)
-2. [Computational Requirements](#computational-requirements)
-3. [Installation Instructions](#installation-instructions)
-4. [Quickstart & Basic Usage](#quickstart--basic-usage)
-5. [Reproducing Paper Results](#reproducing-paper-results)
-6. [Documentation (User Guide & Tutorials)](#documentation-user-guide--tutorials)
-7. [Data & Code Availability](#data--code-availability)
-8. [License](#license)
-9. [Citation](#citation)
+## Requirements
 
----
+The analysis and demonstration scripts require Python and the packages listed in `requirements.txt`. `environment.yml` describes a Conda environment based on Python 3.10. The main training script also has optional framework-specific dependencies. Their installation is platform- and version-sensitive; install only the frameworks you intend to run, and record the exact package versions and environment used for the reported experiments. The repository currently does not provide a complete, version-pinned environment for all seven backends.
 
-## Repository Structure
+The full AutoML training workload can require substantially more time, memory, and disk space than the smoke test. Resource needs depend on the selected frameworks, time budget, and number of runs. GPU is not required by the scripts' default configuration, although an individual framework may support or configure accelerators.
 
-```text
-paper_fbhp_automl_open/
-├── data/                                # Uncompressed input datasets for FBHP modeling
-├── json_automl_f1/                      # Stored AutoML fold predictions, metrics, and configurations (JSON)
-├── tab/                                 # Generated summary tables (CSV / LaTeX / Excel)
-├── img/                                 # Generated figures and comparative plots
-├── examples/
-│   └── run_quickstart_demo.py           # Self-contained smoke test & synthetic FBHP demo
-├── read_data_fbhp.py                    # Data loading, preprocessing, and train/test splitting module
-├── fbhp_automl_analysis_v_0p3.py        # Main AutoML model training, evaluation, and logging script
-├── fbhp_automl_comparison_v_0p3.py      # Statistical comparison, table export, and plotting script
-├── Makefile                             # Automated workflow targets for testing and reproduction
-├── requirements.txt                     # Python package dependencies
-├── environment.yml                      # Conda environment specification
-├── USER_GUIDE.md                        # Detailed guide on inputs, outputs, options, and expected behavior
-├── TUTORIAL.md                          # Step-by-step how-to tutorials for typical use cases
-├── LICENSE                              # GNU General Public License v2.0 (GPL-2.0)
-└── README.md                            # Project overview and setup instructions
-```
+## Installation
 
----
-
-## Computational Requirements
-
-### Software Environment
-* **Operating System:** Linux (Ubuntu 20.04/22.04 LTS recommended; tested on standard x86\_64 Linux environments), macOS, or Windows (via WSL2 for Linux-specific AutoML backends).
-* **Python Version:** Python 3.9, 3.10, or 3.11.
-
-### Hardware & Execution Time
-* **Minimum Hardware (for reproducing tables/figures from `json_automl_f1/` and running quickstart demos):**
-  * CPU: 2+ cores
-  * RAM: 4 GB
-  * Storage: < 500 MB free disk space
-  * Execution time: **< 1 minute**
-* **Recommended Hardware (for full AutoML retraining from scratch):**
-  * CPU: 8+ cores (multi-core execution accelerates cross-validation and AutoML search)
-  * RAM: 16 GB or higher
-  * GPU: Not required (all models run on CPU)
-  * Execution time: Depends on the configured AutoML search budget per fold (typically 15–90 minutes for a complete multi-framework benchmark).
-
----
-
-## Installation Instructions
-
-### Option 1: Using `pip` and `venv` (Recommended)
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/LGoliatt/paper_fbhp_automl_open.git
-   cd paper_fbhp_automl_open
-   ```
-
-2. **Create and activate a virtual environment:**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate        # On Linux/macOS
-   # venv\Scripts\activate         # On Windows
-   ```
-
-3. **Install required dependencies:**
-   ```bash
-   pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
-
-### Option 2: Using Conda
+From the repository root:
 
 ```bash
 git clone https://github.com/LGoliatt/paper_fbhp_automl_open.git
 cd paper_fbhp_automl_open
+python3 -m venv .venv
+source .venv/bin/activate        # Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Alternatively, create the Conda environment:
+
+```bash
 conda env create -f environment.yml
 conda activate fbhp-automl
 ```
 
----
+The base requirements do not install the optional AutoML backends. Install the dependencies for each backend you select, following that framework's installation guidance and compatibility constraints. For `--frameworks`, use the names accepted by the training script, such as `FLAML`, `TPOT`, `Fedot`, `AutoGluon`, `AutoKeras`, `H2O`, and `AutoSklearn`.
 
-## Quickstart & Basic Usage
+## Quick smoke test
 
-### 1. Run the Quickstart Verification Demo
-To verify that your Python environment is properly configured and test the end-to-end FBHP workflow using a synthetic test case (without overwriting paper results), run:
+After installing the base requirements, run:
 
 ```bash
 python examples/run_quickstart_demo.py
 ```
 
-Or using `make`:
+The script creates `examples/demo_output/` with a generated synthetic CSV, fold-level metrics in JSON, and a summary CSV. It trains Extra Trees, Random Forest, and Gradient Boosting models. These results are only a software smoke test; they are not the manuscript results and are not a substitute for the AutoML experiment.
+
+## Reproducing and analyzing results
+
+### Analyze the archived experiment records
+
+The JSON files in `json_automl_f1/` are consumed by the analysis script. Run:
+
 ```bash
-make test
+python fbhp_automl_analysis_v_0p3.py \
+  --input-dir ./json_automl_f1 \
+  --prefix f1_ \
+  --fig-dir ./img \
+  --tab-dir ./tab
 ```
 
-### 2. Run the Full Pipeline via `Makefile`
-The repository includes a `Makefile` to streamline execution:
+The script generates analysis outputs from the JSON records. It may overwrite files in the selected output directories. The exact outputs depend on the content of the input records and on the code version.
+
+### Run AutoML training
+
+The training script's defaults are 30 runs and a 240-second time budget per AutoML run. A framework must be installed before it can be selected. For example, after installing FLAML and the base requirements:
 
 ```bash
-make help          # Display all available targets
-make test          # Run the self-contained quickstart verification script
-make analysis      # Execute AutoML modeling and log results to json_automl_f1/
-make comparison    # Generate comparative tables (tab/) and figures (img/)
-make all           # Run the complete analysis and comparison pipeline
+python fbhp_automl_comparison_v_0p3.py \
+  --dataset F1 \
+  --frameworks FLAML \
+  --runs 1 \
+  --time-budget 60
 ```
 
-### 3. Run Individual Python Modules Directly
-```bash
-# Step 1: Verify data ingestion and preprocessing
-python read_data_fbhp.py
+This is an example smoke run, not the full study protocol. Use the manuscript's precise dataset split, framework versions, seeds, budgets, and other settings to reproduce reported values. Store new JSON results in a separate directory with `--out-dir` to avoid replacing the archived records.
 
-# Step 2: Run AutoML training and cross-validation analysis
-python fbhp_automl_analysis_v_0p3.py
+The script accepts `F1`, `F2`, `SYN`, and `CUSTOM` as dataset choices. **The current public repository does not include the synthetic workbook referenced by `SYN` (`data/synthetic/synthetic_fbhp.xlsx`), so that option is not runnable from this checkout without adding the expected file or correcting the loader.** `CUSTOM` requires an Excel workbook with a numeric `FBHP` target and numeric feature columns.
 
-# Step 3: Aggregate results and generate manuscript tables and plots
-python fbhp_automl_comparison_v_0p3.py
-```
+## Documentation
 
----
+- [User guide](USER_GUIDE.md): inputs, outputs, actual command-line options, and known limitations.
+- [Tutorials](TUTORIAL.md): installation, smoke test, analysis of archived records, and a training example.
 
-## Reproducing Paper Results
+## Data and licensing
 
-1. **Reproducing Tables and Figures from Precomputed AutoML Runs:**
-   All fold-level AutoML evaluation outputs generated during the study are archived in `json_automl_f1/`. Running:
-   ```bash
-   python fbhp_automl_comparison_v_0p3.py
-   ```
-   will parse the JSON logs in `json_automl_f1/` and regenerate the summary performance tables in `tab/` and the comparison figures in `img/`.
-
-2. **Reproducing AutoML Training from Scratch:**
-   Running:
-   ```bash
-   python fbhp_automl_analysis_v_0p3.py
-   ```
-   re-executes the data loading (`read_data_fbhp.py`), cross-validation splits (with fixed random seeds for reproducibility), and AutoML model search, saving structured JSON logs into `json_automl_f1/`.
-
----
-
-## Documentation (User Guide & Tutorials)
-
-* **[`USER_GUIDE.md`](USER_GUIDE.md):** Detailed documentation of input datasets, variable definitions and physical units, JSON result schemas, module parameters, output artifacts, and expected behavior.
-* **[`TUTORIAL.md`](TUTORIAL.md):** Step-by-step tutorials covering environment verification, reproducing paper figures/tables, running AutoML benchmarks, and adapting the pipeline to new well datasets.
-
----
-
-## Data & Code Availability
-
-* All data and result files are provided directly in this repository in uncompressed, human-readable formats (`data/`, `json_automl_f1/`, `tab/`, `img/`). No `.zip`, `.rar`, or `.7z` archives are used.
-* If you adapt this workflow to proprietary field data that cannot be publicly distributed, `examples/run_quickstart_demo.py` provides a physics-inspired synthetic FBHP dataset generator for unit and integration testing.
-
----
-
-## License
-
-This project is licensed under the **GNU General Public License v2.0 (GPL-2.0)** — see the [`LICENSE`](LICENSE) file for full details.
-
----
+The code is licensed under GPL-2.0 as specified in `LICENSE`. The data workbooks and generated research artifacts may have separate rights or source conditions; the software license should not be assumed to cover third-party data. Verify and document the data license and provenance before redistribution or reuse. The repository contains no `.zip`, `.rar`, or `.7z` archive files in the inspected checkout.
 
 ## Citation
 
-If you use this code, data, or workflow in your research, please cite our repository and accompanying manuscript:
+Please cite the associated manuscript and this repository using the final bibliographic information. Replace the placeholder below once the manuscript has a stable citation:
 
-```bibtex
-@misc{goliatt_paper_fbhp_automl_open,
-  author       = {Goliatt, Leonardo and collaborators},
-  title        = {Flowing Bottom-Hole Pressure Prediction Using Automated Machine Learning (paper\_fbhp\_automl\_open)},
-  year         = {2025},
-  publisher    = {GitHub},
-  journal      = {GitHub repository},
-  howpublished = {\url{https://github.com/LGoliatt/paper_fbhp_automl_open}}
-}
+```text
+Manuscript: [insert full citation and DOI or preprint URL]
+Code: https://github.com/LGoliatt/paper_fbhp_automl_open
 ```
+
+The manuscript should contain the repository link in its Code Availability statement. Do not submit the placeholder citation as final metadata.
