@@ -1,7 +1,7 @@
 # Makefile for paper_fbhp_automl_open
 # Provides standardized commands for environment setup, verification, and reproducibility.
 
-PYTHON ?= python3
+PYTHON ?= python
 PIP ?= pip
 
 .PHONY: help install test analysis comparison all clean
