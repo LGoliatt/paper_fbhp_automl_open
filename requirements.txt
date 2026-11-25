@@ -1,0 +1,26 @@
+# Core scientific computing and data manipulation
+numpy>=1.23.0,<2.0.0
+pandas>=1.5.0
+scipy>=1.9.0
+openpyxl>=3.1.0
+
+# Machine learning and evaluation utilities
+scikit-learn>=1.2.0
+joblib>=1.2.0
+
+# Gradient boosting libraries commonly paired with AutoML benchmarks
+xgboost>=1.7.0
+lightgbm>=3.3.5
+catboost>=1.2.0
+
+# AutoML frameworks (uncomment or pin exact versions used in your local environment)
+# auto-sklearn>=0.15.0
+# tpot>=0.12.0
+# flaml>=2.0.0
+# h2o>=3.40.0
+
+# Visualization and reporting
+matplotlib>=3.6.0
+seaborn>=0.12.0
+tabulate>=0.9.0
+tqdm>=4.64.0

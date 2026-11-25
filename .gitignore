@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Temporary demo outputs
+examples/demo_output/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Disallow compacted archive files (policy compliance)
+*.zip
+*.rar
+*.7z
+*.tar.gz
